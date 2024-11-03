@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::net::UdpSocket;
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -12,28 +11,31 @@ use crate::*;
 
 pub struct Server {
     socket: UdpSocket,
-    auth_tokens: Arc<Mutex<HashMap<u64, u64>>>,
-    open_files: Arc<Mutex<HashMap<u64, File>>>,
+    auth_tokens: Vec<u64>,
+    open_files: HashMap<u64, File>,
 }
 
 impl Server {
     pub fn new(bind_addr: &str) -> Result<Self, std::io::Error> {
         let socket = UdpSocket::bind(bind_addr)?;
         socket.set_nonblocking(true)?;
+        let auth_tokens = vec![9014081313589158949];
+
         Ok(Server {
             socket,
-            auth_tokens: Arc::new(Mutex::new(HashMap::new())),
-            open_files: Arc::new(Mutex::new(HashMap::new())),
+            auth_tokens,
+            open_files: HashMap::new(),
         })
     }
 
-    pub fn run(&self) -> Result<(), std::io::Error> {
+    pub fn run(&mut self) -> Result<(), std::io::Error> {
         let mut buf = [0u8; 4096];
         loop {
             match self.socket.recv_from(&mut buf) {
                 Ok((n, src)) => {
                     let request_data = &buf[..n];
                     let request: Request = bincode::deserialize(request_data).unwrap();
+                    eprintln!("Received: {}", request);
                     let response = self.handle_request(request);
                     let response_data = bincode::serialize(&response).unwrap();
                     self.socket.send_to(&response_data, src)?;
@@ -48,10 +50,14 @@ impl Server {
         }
     }
 
-    fn handle_request(&self, request: Request) -> Response {
-        let mut auth_tokens = self.auth_tokens.lock().unwrap();
-        if !auth_tokens.contains_key(&request.auth_token) {
-            auth_tokens.insert(request.auth_token, 0);
+    fn handle_request(&mut self, request: Request) -> Response {
+        if !self.auth_tokens.contains(&request.auth_token) {
+            // Unauthorized
+            return Response {
+                sequence_number: request.sequence_number,
+                status: 2,
+                data: Vec::new(),
+            };
         }
 
         let sequence_number = request.sequence_number;
@@ -80,7 +86,7 @@ impl Server {
         }
     }
 
-    fn handle_open(&self, arguments: Vec<u8>) -> Result<Vec<u8>, ()> {
+    fn handle_open(&mut self, arguments: Vec<u8>) -> Result<Vec<u8>, ()> {
         let args: OpenArgs = bincode::deserialize(&arguments).unwrap();
         let file_result = match args.mode.as_str() {
             "r" => File::open(&args.pathname),
@@ -93,7 +99,7 @@ impl Server {
         match file_result {
             Ok(file) => {
                 let file_id: u64 = rand::thread_rng().gen();
-                self.open_files.lock().unwrap().insert(file_id, file);
+                self.open_files.insert(file_id, file);
                 let reply = OpenReply { file_id, result: 0 };
                 Ok(bincode::serialize(&reply).unwrap())
             }
@@ -107,10 +113,9 @@ impl Server {
         }
     }
 
-    fn handle_read(&self, arguments: Vec<u8>) -> Result<Vec<u8>, ()> {
+    fn handle_read(&mut self, arguments: Vec<u8>) -> Result<Vec<u8>, ()> {
         let args: ReadArgs = bincode::deserialize(&arguments).unwrap();
-        let mut open_files = self.open_files.lock().unwrap();
-        if let Some(file) = open_files.get_mut(&args.file_id) {
+        if let Some(file) = self.open_files.get_mut(&args.file_id) {
             let mut buffer = vec![0u8; args.count];
             match file.read(&mut buffer) {
                 Ok(bytes_read) => {
@@ -141,10 +146,9 @@ impl Server {
         }
     }
 
-    fn handle_write(&self, arguments: Vec<u8>) -> Result<Vec<u8>, ()> {
+    fn handle_write(&mut self, arguments: Vec<u8>) -> Result<Vec<u8>, ()> {
         let args: WriteArgs = bincode::deserialize(&arguments).unwrap();
-        let mut open_files = self.open_files.lock().unwrap();
-        if let Some(file) = open_files.get_mut(&args.file_id) {
+        if let Some(file) = self.open_files.get_mut(&args.file_id) {
             match file.write(&args.data) {
                 Ok(bytes_written) => {
                     let reply = WriteReply {
@@ -170,10 +174,9 @@ impl Server {
         }
     }
 
-    fn handle_lseek(&self, arguments: Vec<u8>) -> Result<Vec<u8>, ()> {
+    fn handle_lseek(&mut self, arguments: Vec<u8>) -> Result<Vec<u8>, ()> {
         let args: LseekArgs = bincode::deserialize(&arguments).unwrap();
-        let mut open_files = self.open_files.lock().unwrap();
-        if let Some(file) = open_files.get_mut(&args.file_id) {
+        if let Some(file) = self.open_files.get_mut(&args.file_id) {
             let whence = match args.whence {
                 0 => SeekFrom::Start(args.offset as u64),
                 1 => SeekFrom::Current(args.offset),

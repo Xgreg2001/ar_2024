@@ -16,7 +16,7 @@ impl Client {
     pub fn new(server_addr: &str) -> Result<Self, std::io::Error> {
         let socket = UdpSocket::bind("0.0.0.0:0")?; // Any available port
         socket.set_read_timeout(Some(Duration::from_secs(5)))?;
-        let auth_token: u64 = rand::thread_rng().gen();
+        let auth_token: u64 = 9014081313589158949;
         Ok(Client {
             socket,
             server_addr: server_addr.to_string(),
@@ -85,7 +85,7 @@ impl Client {
         }
     }
 
-    fn chmod(&self, pathname: &str, mode: u32) -> Result<(), std::io::Error> {
+    pub fn chmod(&self, pathname: &str, mode: u32) -> Result<(), std::io::Error> {
         let seq_num: u64 = rand::thread_rng().gen();
         let args = ChmodArgs {
             pathname: pathname.to_string(),
@@ -111,7 +111,7 @@ impl Client {
         }
     }
 
-    fn unlink(&self, pathname: &str) -> Result<(), std::io::Error> {
+    pub fn unlink(&self, pathname: &str) -> Result<(), std::io::Error> {
         let seq_num: u64 = rand::thread_rng().gen();
         let args = UnlinkArgs {
             pathname: pathname.to_string(),
@@ -136,7 +136,7 @@ impl Client {
         }
     }
 
-    fn rename(&self, oldpath: &str, newpath: &str) -> Result<(), std::io::Error> {
+    pub fn rename(&self, oldpath: &str, newpath: &str) -> Result<(), std::io::Error> {
         let seq_num: u64 = rand::thread_rng().gen();
         let args = RenameArgs {
             oldpath: oldpath.to_string(),
