@@ -1,0 +1,1 @@
+Hadoop jest frameworkiem do przetwarzania dużych zbiorów danych.

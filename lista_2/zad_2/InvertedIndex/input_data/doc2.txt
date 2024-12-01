@@ -1,0 +1,1 @@
+MapReduce jest modelem programowania w Hadoop.
