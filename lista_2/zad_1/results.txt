@@ -1,0 +1,5 @@
+Hello: 2
+Goodbye: 1
+Bye: 1
+Hadoop: 2
+World: 2
