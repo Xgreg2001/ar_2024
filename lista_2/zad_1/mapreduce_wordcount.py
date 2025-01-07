@@ -5,9 +5,6 @@ import collections
 
 
 def worker_map(pipe_conn):
-    """
-    Worker function for the MAP phase.
-    """
     print(f"MAP worker {os.getpid()} started.")
     word_counts = collections.Counter()
 
@@ -27,9 +24,6 @@ def worker_map(pipe_conn):
 
 
 def worker_reduce(pipe_conn):
-    """
-    Worker function for the REDUCE phase.
-    """
     print(f"REDUCE worker {os.getpid()} started.")
     word_counts = collections.Counter()
     while True:
